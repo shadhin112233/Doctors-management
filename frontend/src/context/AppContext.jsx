@@ -9,41 +9,55 @@ const AppContextProvider = (props) => {
   const currencySymbol = "$";
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
-  const [doctors, setDoctors] = useState([]);
+  // Ager bar-er doctor data browser-e save thake, tai site khulei dekha jabe
+  const [doctors, setDoctors] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("doctors_cache")) || [];
+    } catch {
+      return [];
+    }
+  });
+  const [doctorsLoading, setDoctorsLoading] = useState(true);
+
   const [token, setToken] = useState(localStorage.getItem("token") || "");
-  
-  // 🎯 ১. 'userdata' পরিবর্তন করে 'userData' (D বড় হাতের) এবং ইনিশিয়াল ভ্যালু 'null' করা হয়েছে
   const [userData, setUserData] = useState(null);
 
-  // Get all doctors
-  const getDoctorsData = async () => {
+  // Get all doctors (backend ghumiye thakle 3 bar chesta korbe)
+  const getDoctorsData = async (attempt = 1) => {
     try {
       const { data } = await axios.get(backendUrl + "/api/doctor/list");
 
       if (data.success) {
         setDoctors(data.doctors);
+        localStorage.setItem("doctors_cache", JSON.stringify(data.doctors));
+        setDoctorsLoading(false);
       } else {
         toast.error(data.message);
+        setDoctorsLoading(false);
       }
 
     } catch (error) {
       console.log(error);
-      toast.error(error.message);
+      if (attempt < 3) {
+        // Render server jagte somoy lage, tai toast na diye abar chesta
+        setTimeout(() => getDoctorsData(attempt + 1), 4000);
+      } else {
+        toast.error(error.message);
+        setDoctorsLoading(false);
+      }
     }
   };
 
   const loadUserProfileData = async () => {
     try {
-      // headers-এ সঠিক উপায়ে টোকেন পাঠানো হচ্ছে
       const { data } = await axios.get(backendUrl + '/api/user/get-profile', { headers: { token } });
 
       if (data.success) {
-        // 🎯 ২. ব্যাকএন্ড কন্ট্রোলার থেকে 'userData' (D বড় হাতের) আসছে, তাই এখানেও ঠিক করা হলো
-        setUserData(data.userData); 
+        setUserData(data.userData);
       } else {
         toast.error(data.message);
       }
-      
+
     } catch (error) {
       console.log(error);
       toast.error(error.message);
@@ -55,25 +69,24 @@ const AppContextProvider = (props) => {
     getDoctorsData();
   }, []);
 
-  // 🎯 যখনই টোকেন থাকবে, ইউজারের প্রোফাইল ডাটা লোড হবে
   useEffect(() => {
     if (token) {
       loadUserProfileData();
     } else {
-      setUserData(null); // টোকেন না থাকলে প্রোফাইল খালি (null) হয়ে যাবে
+      setUserData(null);
     }
   }, [token]);
 
-  // value অবজেক্টে নামগুলো ঠিক করে পাস করা হলো
   const value = {
-    doctors,getDoctorsData,
+    doctors, getDoctorsData,
     setDoctors,
+    doctorsLoading,
     currencySymbol,
     backendUrl,
     token,
     setToken,
-    userData,     // 🎯 D বড় হাতের
-    setUserData,  // 🎯 D বড় হাতের
+    userData,
+    setUserData,
     loadUserProfileData
   };
 
