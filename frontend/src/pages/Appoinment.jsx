@@ -6,12 +6,33 @@ import RealatedDoctors from '../components/RealatedDoctors'
 import { toast } from 'react-toastify'
 import axios from 'axios'
 
+// Cloudinary pic automatic choto + WebP hobe
+const optimize = (url, width = 600) =>
+  url && url.includes('res.cloudinary.com') && url.includes('/upload/')
+    ? url.replace('/upload/', `/upload/f_auto,q_auto,w_${width}/`)
+    : url
+
+// Data ashar age ei skeleton dekhabe
+const AppointmentSkeleton = () => (
+  <div className='flex flex-col sm:flex-row gap-4'>
+    <div className='bg-blue-100 w-full sm:max-w-72 h-72 rounded-lg animate-pulse' />
+    <div className='flex-1 border border-gray-200 rounded-lg p-8 py-7 bg-white mx-2 sm:mx-0 mt-[-80px] sm:mt-0 space-y-3'>
+      <div className='h-7 w-56 bg-gray-200 rounded animate-pulse' />
+      <div className='h-4 w-72 bg-gray-200 rounded animate-pulse' />
+      <div className='h-4 w-full bg-gray-200 rounded animate-pulse' />
+      <div className='h-4 w-5/6 bg-gray-200 rounded animate-pulse' />
+      <div className='h-4 w-40 bg-gray-200 rounded animate-pulse' />
+    </div>
+  </div>
+)
+
 const Appointment = () => {
   const navigate = useNavigate()
   const { docId } = useParams()
 
   const {
     doctors,
+    doctorsLoading,
     currencySymbol,
     backendUrl,
     token,
@@ -24,6 +45,7 @@ const Appointment = () => {
   const [docSlots, setDocSlots] = useState([])
   const [slotIndex, setSlotIndex] = useState(0)
   const [slotTime, setSlotTime] = useState('')
+  const [imgLoaded, setImgLoaded] = useState(false)
 
   // Fetch doctor info
   const fetchDocInfo = async () => {
@@ -75,6 +97,11 @@ const Appointment = () => {
     fetchDocInfo()
   }, [doctors, docId])
 
+  // Doctor change hole pic-er loading abar shuru hobe
+  useEffect(() => {
+    setImgLoaded(false)
+  }, [docId])
+
   // Generate slots
   useEffect(() => {
     if (!docInfo) return
@@ -111,15 +138,32 @@ const Appointment = () => {
     setDocSlots(generated)
   }, [docInfo])
 
-  return docInfo && (
+  // Doctor-er data ekhono ashche kina
+  const isLoading = (doctorsLoading ?? true) && (!doctors || doctors.length === 0)
+  const notFound = !isLoading && !doctors.some(doc => doc._id === docId)
+
+  if (!docInfo) {
+    if (notFound) {
+      return <p className='text-center text-gray-500 py-20'>Doctor not found.</p>
+    }
+    return <AppointmentSkeleton />
+  }
+
+  return (
     <div>
       <div className='flex flex-col sm:flex-row gap-4'>
         <div>
-          <img
-            className='bg-blue-400 w-full sm:max-w-72 rounded-lg'
-            src={docInfo.image}
-            alt=""
-          />
+          <div className={`bg-blue-400 w-full sm:max-w-72 rounded-lg overflow-hidden ${imgLoaded ? '' : 'animate-pulse min-h-72'}`}>
+            <img
+              className={`w-full transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              src={optimize(docInfo.image)}
+              alt={docInfo.name || ''}
+              fetchpriority='high'
+              decoding='async'
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+            />
+          </div>
         </div>
 
         <div className='flex-1 border border-gray-400 rounded-lg p-8 py-7 bg-white mx-2 sm:mx-0 mt-[-80px] sm:mt-0'>
@@ -200,8 +244,7 @@ const Appointment = () => {
               let year = currentDate.getFullYear()
               const slotDate = `${day}_${month}_${year}`
 
-              // ২. স্ক্রিনশটের মূল ফিল্টারিং লজিক এখানে ব্যবহার করা হয়েছে
-              // চেক করা হচ্ছে এই স্লট টাইমটি অলরেডি ব্যাকএন্ডের বুকড লিস্টে আছে কি না
+              // ২. এই স্লট টাইমটি অলরেডি ব্যাকএন্ডের বুকড লিস্টে আছে কি না চেক
               const isBooked = docInfo.slots_booked && 
                                docInfo.slots_booked[slotDate] && 
                                docInfo.slots_booked[slotDate].includes(formattedTime);
@@ -209,14 +252,13 @@ const Appointment = () => {
               return (
                 <p
                   key={index}
-                  // যদি অলরেডি বুকড হয়, তবে ক্লিক ফাংশন কাজ করবে না
                   onClick={() => !isBooked && setSlotTime(formattedTime)}
                   className={`text-sm font-light flex-shrink-0 px-5 py-2 rounded-full cursor-pointer transition-all ${
                     isBooked
-                      ? 'bg-red-100 text-red-500 border border-red-300 line-through opacity-70 cursor-not-allowed' // স্লট বুকড থাকলে লাল ও ক্রস দেখাবে
+                      ? 'bg-red-100 text-red-500 border border-red-300 line-through opacity-70 cursor-not-allowed'
                       : slotTime === formattedTime
-                      ? 'bg-blue-500 text-white border border-blue-500' // সিলেক্টেড থাকলে নীল দেখাবে
-                      : 'bg-gray-200 text-gray-700 border border-transparent' // নরমাল স্লট ধূসর দেখাবে
+                      ? 'bg-blue-500 text-white border border-blue-500'
+                      : 'bg-gray-200 text-gray-700 border border-transparent'
                   }`}
                 >
                   {formattedTime}
